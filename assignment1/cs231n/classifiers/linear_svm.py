@@ -22,18 +22,30 @@ def svm_loss_naive(W, X, y, reg):
   dW = np.zeros(W.shape) # initialize the gradient as zero
 
   # compute the loss and the gradient
-  num_classes = W.shape[1]
-  num_train = X.shape[0]
+  num_classes = W.shape[1] #C
+  num_train = X.shape[0] #N
   loss = 0.0
+
   for i in xrange(num_train):
     scores = X[i].dot(W)
     correct_class_score = scores[y[i]]
     for j in xrange(num_classes):
       if j == y[i]:
+        # skip for the true class to only loop over incorrect classes
         continue
       margin = scores[j] - correct_class_score + 1 # note delta = 1
       if margin > 0:
         loss += margin
+        # calculate gradient using Calculus
+        # a.k.a. analytic gradient
+        # margin > 0 means the indicator function is true
+        # differentiate with respect to weight
+        # iterate over all the class
+        x_t = X.T
+        #print x_t.shape
+        dW[:,j] = dW[:,j] + x_t[:,i]
+        # subtract the true class
+        dW[:,y[i]] = dW[:,y[i]] - x_t[:,i]
 
   # Right now the loss is a sum over all training examples, but we want it
   # to be an average instead so we divide by num_train.
@@ -50,7 +62,9 @@ def svm_loss_naive(W, X, y, reg):
   # loss is being computed. As a result you may need to modify some of the    #
   # code above to compute the gradient.                                       #
   #############################################################################
-
+  dW = dW / num_train
+  # regularization?
+  dW += reg*W
 
   return loss, dW
 
@@ -69,7 +83,23 @@ def svm_loss_vectorized(W, X, y, reg):
   # Implement a vectorized version of the structured SVM loss, storing the    #
   # result in loss.                                                           #
   #############################################################################
-  pass
+  C = W.shape[1] #num_classes
+  N = X.shape[0] #num_train
+  scores = X.dot(W)
+  delta = 1
+  margin = scores - scores[np.arange(N),y][:,None] + delta
+
+  mask0 = np.zeros((N,C),dtype=bool)
+  mask0[np.arange(N),y] = 1
+  mask = (margin <= 0) | mask0
+  margin[mask] = 0 # if <=0 then set to 0
+
+  loss = margin.sum() / N
+
+  # Add regularization to the loss
+  #loss += 0.5 * reg * np.sum(W * W)
+  loss += 0.5 * reg * float(np.tensordot(W,W,axes=((0,1),(0,1))))
+  # according to http://stackoverflow.com/questions/42971039/how-to-vectorize-loss-in-svm
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -84,7 +114,11 @@ def svm_loss_vectorized(W, X, y, reg):
   # to reuse some of the intermediate values that you used to compute the     #
   # loss.                                                                     #
   #############################################################################
-  pass
+  mask[np.arange(N),y] = 0
+  dW = (X.T).dot(mask)
+  dW /= N
+  dW += reg*W
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
