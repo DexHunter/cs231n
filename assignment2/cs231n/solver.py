@@ -31,7 +31,7 @@ class Solver(object):
     'X_train': # training data
     'y_train': # training labels
     'X_val': # validation data
-    'y_val': # validation labels
+    'X_train': # validation labels
   }
   model = MyAwesomeModel(hidden_size=100, reg=10)
   solver = Solver(model, data,
@@ -169,6 +169,7 @@ class Solver(object):
     for p, w in self.model.params.iteritems():
       dw = grads[p]
       config = self.optim_configs[p]
+      #print(p)
       next_w, next_config = self.update_rule(w, dw, config)
       self.model.params[p] = next_w
       self.optim_configs[p] = next_config

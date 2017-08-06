@@ -204,14 +204,19 @@ class FullyConnectedNet(object):
     # beta2, etc. Scale parameters should be initialized to one and shift      #
     # parameters should be initialized to zero.                                #
     ############################################################################
-    hidden_dims.insert(0, input_dim)
-    hidden_dims.append(num_classes)
+    full_layer = hidden_dims
+    full_layer.insert(0, input_dim)
+    full_layer.append(num_classes)
+    #print(full_layer)
     for i in xrange(self.num_layers):
-        self.params['W'+str(i+1)] = weight_scale * np.random.randn(hidden_dims[i], hidden_dims[i+1])
-        self.params['b'+str(i+1)] = np.zeros((1,hidden_dims[i+1]))
-        if self.use_batchnorm and i < self.num_layers: #the layer number of hidden_dim and num_layers is the same and repeat L-1 times as instructioned
-            self.params['gamma'+str(i+1)] = np.ones(hidden_dims[i+1])
-            self.params['beta'+str(i+1)] = np.zeros(hidden_dims[i+1])
+        ind = str(i+1)
+        #print(ind)
+        self.params['W'+ind] = weight_scale * np.random.randn(full_layer[i], full_layer[i+1])
+        self.params['b'+ind] = np.zeros((1,full_layer[i+1]))
+
+        if self.use_batchnorm and i < self.num_layers-1: #the layer number of hidden_dim and num_layers is the same and repeat L-1 times as instructioned
+            self.params['gamma'+ind] = np.ones(full_layer[i+1]) #scale
+            self.params['beta'+ind] = np.zeros(full_layer[i+1]) #shift
 
 
     ############################################################################
@@ -254,6 +259,7 @@ class FullyConnectedNet(object):
     # behave differently during training and testing.
     if self.dropout_param is not None:
       self.dropout_param['mode'] = mode
+
     if self.use_batchnorm:
       for bn_param in self.bn_params:
         bn_param[mode] = mode
@@ -273,11 +279,18 @@ class FullyConnectedNet(object):
     ############################################################################
     cache = {}
     dpcache = {}
-    bncache = {}
     out = X #initialize out
+
     for i in xrange(self.num_layers-1):
         ind = str(i+1)
-        out, cache[ind] = affine_relu_forward(out, self.params['W'+ind], self.params['b'+ind])
+        if self.use_batchnorm:
+            out, cache[ind] = affine_bn_relu_forward(out, self.params['W'+ind], self.params['b'+ind], self.params['gamma'+ind], self.params['beta'+ind], self.bn_params[i])
+        else:
+            out, cache[ind] = affine_relu_forward(out, self.params['W'+ind], self.params['b'+ind])
+
+        if self.use_dropout:
+            out, dpcache[ind] = dropout_forward(out, self.dropout_param)
+
 
     scores, cache[str(self.num_layers)] = affine_forward(out, self.params['W'+str(self.num_layers)], self.params['b'+str(self.num_layers)])
 
@@ -312,6 +325,7 @@ class FullyConnectedNet(object):
     #    loss += 0.5*self.reg*np.sum(self.params['W'+ind]**2)
     #    dx[i], grads['W'+ind], grads['b'+ind] = affine_relu_backward(dx[i+1], cache[ind])
     #    grads['W'+ind] += self.reg * self.params['W'+ind]
+
     loss, dscores = softmax_loss(scores, y)
 
     #add regularization loss
@@ -326,7 +340,14 @@ class FullyConnectedNet(object):
 
     for i in reversed(xrange(1, self.num_layers)):
         #self.num_layers-1 to 1
-        dx[i], grads['W'+str(i)], grads['b'+str(i)] = affine_relu_backward(dx[i+1], cache[str(i)])
+        if self.use_dropout:
+            dx[i] = dropout_backward(dx[i+1], dpcache[str(i)])
+
+        if self.use_batchnorm:
+            dx[i], grads['W'+str(i)], grads['b'+str(i)], grads['gamma'+str(i)], grads['beta'+str(i)] = affine_bn_relu_backward(dx[i+1], cache[str(i)])
+        else:
+            dx[i], grads['W'+str(i)], grads['b'+str(i)] = affine_relu_backward(dx[i+1], cache[str(i)])
+
         grads['W'+str(i)] += self.reg*self.params['W'+str(i)]
     ############################################################################
     #                             END OF YOUR CODE                             #
